@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 
@@ -14,6 +15,9 @@ func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Fatal("Error loading .env file")
 	}
+
+	_ = flag.String("type", "", "Type of seeding to run: countries, cities, hotels, rooms")
+	flag.Parse()
 
 	store.InitDB()
 

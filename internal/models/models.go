@@ -104,12 +104,13 @@ type RoomOffer struct {
 	HotelID        string         `gorm:"index;not null"` // Links to Hotel.ID
 	Name           string         `gorm:"not null"`       // "Ocean King"
 	
-	Count          int            `gorm:"default:0"`
 	BookingCode    string         `gorm:"not null"`       // API Booking Key
 	TotalFare      float64        `gorm:"type:decimal(10,2);not null"`
 	Currency       string         `gorm:"size:3;default:'USD'"`
 	IsRefundable   bool           `gorm:"default:false"`
 	CancelPolicies datatypes.JSON `gorm:"type:jsonb"` // Stores the complex policy array
+	Count          int            `gorm:"default:100"`
+	MaxCapacity    int            `gorm:"default:2"`
 }
 
 // 5. Banquet Halls
