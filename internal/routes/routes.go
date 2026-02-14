@@ -37,13 +37,7 @@ func SetupRoutes(app *fiber.App, cfg *config.Config, repo *handlers.Repository) 
 	// -----------------------------
 	var protected fiber.Router
 
-	if cfg.Env == "development" {
-		// Disable auth in development
-		protected = api.Group("/")
-	} else {
-		// Enable auth in production
-		protected = api.Group("/", middleware.Protected)
-	}
+	protected = api.Group("/", middleware.Protected)
 
 	// Authenticated user
 	protected.Get("/me", repo.GetMe)
