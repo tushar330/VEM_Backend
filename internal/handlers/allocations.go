@@ -1,39 +1,20 @@
 package handlers
 
 import (
-	"github.com/akashtripathi12/TBO_Backend/internal/utils"
 	"github.com/gofiber/fiber/v2"
 )
 
-func (m *Repository) CreateAllocation(c *fiber.Ctx) error {
-	// TODO: Parse request body
-	// var allocation models.RoomAllocation
-	// if err := c.BodyParser(&allocation); err != nil {
-	//     return utils.ValidationErrorResponse(c, "Invalid request body")
-	// }
-
-	// TODO: Create allocation
-	// if err := m.DB.CreateAllocation(allocation); err != nil {
-	//     return utils.InternalErrorResponse(c, "Failed to create allocation")
-	// }
-
-	return utils.SuccessResponse(c, fiber.StatusCreated, fiber.Map{
-		"message": "Create Allocation Endpoint",
-	})
+// CreateAllocation wraps the AllocateFamilyHandler for Repository pattern
+func (repo *Repository) CreateAllocation(c *fiber.Ctx) error {
+	handler := AllocateFamilyHandler(repo.DB)
+	return handler(c)
 }
 
-func (m *Repository) UpdateAllocation(c *fiber.Ctx) error {
-	// Get allocation ID from path parameter
-	id := c.Params("id")
-
-	// TODO: Parse request body and update allocation
-	// var allocation models.RoomAllocation
-	// if err := c.BodyParser(&allocation); err != nil {
-	//     return utils.ValidationErrorResponse(c, "Invalid request body")
-	// }
-
-	return utils.SuccessResponse(c, fiber.StatusOK, fiber.Map{
-		"message": "Update Allocation Endpoint",
-		"id":      id,
+// UpdateAllocation handles updating an allocation (placeholder for future implementation)
+func (repo *Repository) UpdateAllocation(c *fiber.Ctx) error {
+	// TODO: Implement allocation update logic
+	// For now, return method not implemented
+	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
+		"error": "Update allocation not yet implemented",
 	})
 }

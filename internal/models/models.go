@@ -35,7 +35,7 @@ type Guest struct {
 	Phone         string
 	Email         string
 	EventID       uuid.UUID `gorm:"type:uuid;index;not null"`
-	FamilyID      uuid.UUID `gorm:"type:uuid;index"`
+	FamilyID      uuid.UUID `gorm:"type:uuid;index;not null"` // REQUIRED for family-based allocation
 	ArrivalDate   time.Time
 	DepartureDate time.Time
 }
@@ -61,7 +61,6 @@ type Event struct {
 	StartDate      time.Time      `json:"startDate"`
 	EndDate        time.Time      `json:"endDate"`
 }
-
 
 // 1. Country Table (Global)
 type Country struct {
@@ -101,17 +100,17 @@ type Hotel struct {
 
 // 4. Room Offers (Global Static)
 type RoomOffer struct {
-	ID             string         `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
-	HotelID        string         `gorm:"index;not null"` // Links to Hotel.ID
-	Name           string         `gorm:"not null"`       // "Ocean King"
-	
-	BookingCode    string         `gorm:"not null"`       // API Booking Key
+	ID      string `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
+	HotelID string `gorm:"index;not null"` // Links to Hotel.ID
+	Name    string `gorm:"not null"`       // "Ocean King"
+
+	BookingCode    string         `gorm:"not null"` // API Booking Key
+	MaxCapacity    int            `gorm:"not null;default:2"`
 	TotalFare      float64        `gorm:"type:decimal(10,2);not null"`
 	Currency       string         `gorm:"size:3;default:'USD'"`
 	IsRefundable   bool           `gorm:"default:false"`
 	CancelPolicies datatypes.JSON `gorm:"type:jsonb"` // Stores the complex policy array
 	Count          int            `gorm:"default:100"`
-	MaxCapacity    int            `gorm:"default:2"`
 }
 
 // 5. Banquet Halls
@@ -134,13 +133,13 @@ type CateringMenu struct {
 
 // 7. Guest Allocation (The "Join" Table)
 type GuestAllocation struct {
-	ID uint `gorm:"primaryKey"`
+	ID uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 
 	// Links to your EXISTING tables
-	EventID uuid.UUID `gorm:"type:uuid;index;not null"`
+	EventID uuid.UUID `gorm:"type:uuid;index;not null;uniqueIndex:idx_event_guest"`
 	Event   Event     `gorm:"foreignKey:EventID"`
 
-	GuestID uuid.UUID `gorm:"type:uuid;index;not null"`
+	GuestID uuid.UUID `gorm:"type:uuid;index;not null;uniqueIndex:idx_event_guest"`
 	Guest   Guest     `gorm:"foreignKey:GuestID"`
 
 	// Links to the NEW table
@@ -148,8 +147,7 @@ type GuestAllocation struct {
 	RoomOffer   RoomOffer `gorm:"foreignKey:RoomOfferID"`
 
 	// The Logic Columns
-	VirtualRoomID int     `gorm:"index"`              // Roommate logic
-	LockedPrice   float64 `gorm:"type:decimal(10,2)"` // Audit
-	Status        string  `gorm:"default:'pending'"`  // 'confirmed', 'checked_in'
-	AssignedMode  string  `gorm:"default:'manual'"`   // 'auto', 'manual'
+	LockedPrice  float64 `gorm:"type:decimal(10,2)"`     // Audit - price locked at allocation
+	Status       string  `gorm:"default:'allocated'"`    // 'allocated', 'checked_in', 'checked_out', 'cancelled'
+	AssignedMode string  `gorm:"default:'agent_manual'"` // 'agent_manual', 'head_guest_manual'
 }
