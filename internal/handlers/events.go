@@ -120,7 +120,6 @@ func (m *Repository) CreateEvent(c *fiber.Ctx) error {
 	event := models.Event{
 		ID:             uuid.New(),
 		AgentID:        agentID,
-		Name:           req.Name, // Added Name
 		HotelID:        req.HotelID,
 		Location:       req.Location,
 		StartDate:      startDate,
