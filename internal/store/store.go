@@ -4,7 +4,6 @@ import (
 	"log"
 	"os"
 
-	"github.com/akashtripathi12/TBO_Backend/internal/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -22,23 +21,4 @@ func InitDB() {
 	}
 
 	log.Println("✅ Connected to Supabase")
-
-	// Auto Migrate
-	err = DB.AutoMigrate(
-		&models.User{},
-		&models.AgentProfile{},
-		&models.Guest{},
-		&models.Event{},
-		&models.Country{},
-		&models.City{},
-		&models.Hotel{},
-		&models.RoomOffer{},
-		&models.BanquetHall{},
-		&models.CateringMenu{},
-		&models.GuestAllocation{},
-	)
-	if err != nil {
-		log.Fatal("Failed to migrate database:", err)
-	}
-	log.Println("✅ Database Migrated")
 }
