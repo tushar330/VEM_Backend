@@ -10,11 +10,20 @@ func (repo *Repository) CreateAllocation(c *fiber.Ctx) error {
 	return handler(c)
 }
 
-// UpdateAllocation handles updating an allocation (placeholder for future implementation)
+// UpdateAllocation handles updating an allocation
 func (repo *Repository) UpdateAllocation(c *fiber.Ctx) error {
-	// TODO: Implement allocation update logic
-	// For now, return method not implemented
-	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-		"error": "Update allocation not yet implemented",
-	})
+	handler := UpdateAllocationHandler(repo.DB)
+	return handler(c)
+}
+
+// GetEventAllocations handles retrieving allocations for an event
+func (repo *Repository) GetEventAllocations(c *fiber.Ctx) error {
+	handler := GetEventAllocationsHandler(repo.DB)
+	return handler(c)
+}
+
+// AutoAllocate handles auto-allocation of families
+func (repo *Repository) AutoAllocate(c *fiber.Ctx) error {
+	handler := AutoAllocateHandler(repo.DB)
+	return handler(c)
 }
