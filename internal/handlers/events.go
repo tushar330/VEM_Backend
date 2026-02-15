@@ -169,22 +169,6 @@ func (m *Repository) GetEventVenues(c *fiber.Ctx) error {
 	})
 }
 
-func (m *Repository) GetEventAllocations(c *fiber.Ctx) error {
-	// Get event ID from path parameter
-	id := c.Params("id")
-
-	// TODO: Get allocations for event
-	// allocations, err := m.DB.GetAllocationsByEventID(id)
-	// if err != nil {
-	//     return utils.InternalErrorResponse(c, "Failed to fetch allocations")
-	// }
-
-	return utils.SuccessResponse(c, fiber.StatusOK, fiber.Map{
-		"message": "Get Event Allocations Endpoint",
-		"eventId": id,
-	})
-}
-
 // UpdateEventRequest struct
 type UpdateEventRequest struct {
 	Name      string `json:"name"`

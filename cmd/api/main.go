@@ -22,6 +22,7 @@ func main() {
 
 	// Initialize Store
 	store.InitDB()
+	log.Println("✅ DB Connected. URL:", os.Getenv("DATABASE_URL"))
 
 	// Initialize Repository
 	repo := handlers.NewRepository(cfg, store.DB)
