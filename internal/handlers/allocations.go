@@ -27,3 +27,15 @@ func (repo *Repository) AutoAllocate(c *fiber.Ctx) error {
 	handler := AutoAllocateHandler(repo.DB)
 	return handler(c)
 }
+
+// FinalizeRooms handles finalizing room allocations
+func (repo *Repository) FinalizeRooms(c *fiber.Ctx) error {
+	handler := FinalizeRoomsHandler(repo.DB)
+	return handler(c)
+}
+
+// ReopenAllocation handles reopening room allocations
+func (repo *Repository) ReopenAllocation(c *fiber.Ctx) error {
+	handler := ReopenAllocationHandler(repo.DB)
+	return handler(c)
+}

@@ -60,6 +60,8 @@ func SetupRoutes(app *fiber.App, cfg *config.Config, repo *handlers.Repository) 
 	events.Post("/:id/auto-allocate", repo.AutoAllocate)
 	events.Get("/:id/guests", repo.GetGuests)
 	events.Post("/:id/head-guest", repo.AssignHeadGuest)
+	events.Post("/:id/finalize", repo.FinalizeRooms)
+	events.Post("/:id/reopen", repo.ReopenAllocation)
 
 	// Cart Routes
 	events.Get("/:id/cart", repo.GetEventCart)

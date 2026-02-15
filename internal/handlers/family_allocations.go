@@ -253,7 +253,7 @@ func AllocateFamilyHandler(db *gorm.DB) fiber.Handler {
 		if event.Status == "rooms_finalized" {
 			tx.Rollback()
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"error": "Cannot allocate rooms. Event status is 'rooms_finalized'",
+				"error": "Room mapping is locked. Try contacting agent.",
 			})
 		}
 
@@ -414,93 +414,84 @@ func AllocateFamilyHandler(db *gorm.DB) fiber.Handler {
 // FinalizeRoomsHandler finalizes room allocations for an event
 func FinalizeRoomsHandler(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// Extract authenticated user from context
+		// Extract authenticated user
 		userID := c.Locals("userID")
 		if userID == nil {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Unauthorized",
-			})
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 		}
-
 		userUUID, ok := userID.(uuid.UUID)
 		if !ok {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Invalid user ID type",
-			})
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Invalid user ID type"})
 		}
 
-		// Get user role from context
+		// Check role
 		userRole := c.Locals("role")
 		if userRole == nil {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Unauthorized",
-			})
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 		}
-
 		role, ok := userRole.(string)
 		if !ok {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Invalid user role type",
-			})
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Invalid user role type"})
 		}
 
-		// Validate role
 		if role != "agent" && role != "head_guest" {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"error": "Not authorized for this event",
-			})
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not authorized"})
 		}
 
 		eventID := c.Params("eventId")
-
 		eventUUID, err := uuid.Parse(eventID)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Invalid event_id",
-			})
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid event_id"})
 		}
+
+		// BEGIN TRANSACTION with lock
+		tx := db.Begin()
+		defer func() {
+			if r := recover(); r != nil {
+				tx.Rollback()
+			}
+		}()
 
 		var event models.Event
-		if err := db.Where("id = ?", eventUUID).First(&event).Error; err != nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error": "Event not found",
-			})
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", eventUUID).First(&event).Error; err != nil {
+			tx.Rollback()
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Event not found"})
 		}
 
-		// Enforce strict ownership validation
+		// Ownership Validation
 		if role == "agent" {
 			if userUUID != event.AgentID {
-				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-					"error": "Not authorized for this event",
-				})
+				tx.Rollback()
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not authorized for this event"})
 			}
 		} else if role == "head_guest" {
 			if userUUID != event.HeadGuestID {
-				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-					"error": "Not authorized for this event",
-				})
+				tx.Rollback()
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not authorized for this event"})
 			}
 		}
 
 		if event.Status == "rooms_finalized" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Rooms are already finalized",
-			})
+			tx.Rollback()
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Rooms are already finalized"})
 		}
 
-		// Update status to rooms_finalized
-		if err := db.Model(&event).Update("status", "rooms_finalized").Error; err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Failed to finalize rooms",
-			})
+		// Update Status
+		if err := tx.Model(&event).Update("status", "rooms_finalized").Error; err != nil {
+			tx.Rollback()
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to finalize rooms"})
+		}
+
+		if err := tx.Commit().Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Commit failed"})
 		}
 
 		log.Printf("✅ Event %s rooms finalized", eventID)
 
 		return c.JSON(fiber.Map{
-			"message":  "Rooms finalized successfully",
-			"event_id": eventID,
+			"message":  "Room mapping locked successfully",
 			"status":   "rooms_finalized",
+			"event_id": eventID,
 		})
 	}
 }
@@ -508,85 +499,72 @@ func FinalizeRoomsHandler(db *gorm.DB) fiber.Handler {
 // ReopenAllocationHandler reopens allocation for an event (agent only)
 func ReopenAllocationHandler(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// Extract authenticated user from context
+		// Extract authenticated user
 		userID := c.Locals("userID")
 		if userID == nil {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Unauthorized",
-			})
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 		}
-
 		userUUID, ok := userID.(uuid.UUID)
 		if !ok {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Invalid user ID type",
-			})
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Invalid user ID type"})
 		}
 
-		// Get user role from context
+		// Check role
 		userRole := c.Locals("role")
 		if userRole == nil {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Unauthorized",
-			})
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 		}
-
 		role, ok := userRole.(string)
 		if !ok {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Invalid user role type",
-			})
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Invalid user role type"})
 		}
 
-		// Reopen is agent-only operation
 		if role != "agent" {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"error": "Not authorized for this event",
-			})
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not authorized"})
 		}
 
 		eventID := c.Params("eventId")
-
 		eventUUID, err := uuid.Parse(eventID)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Invalid event_id",
-			})
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid event_id"})
 		}
+
+		// BEGIN TRANSACTION with lock
+		tx := db.Begin()
+		defer func() {
+			if r := recover(); r != nil {
+				tx.Rollback()
+			}
+		}()
 
 		var event models.Event
-		if err := db.Where("id = ?", eventUUID).First(&event).Error; err != nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error": "Event not found",
-			})
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", eventUUID).First(&event).Error; err != nil {
+			tx.Rollback()
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Event not found"})
 		}
 
-		// Enforce strict ownership validation (agent only)
+		// Ownership (Agent only)
 		if userUUID != event.AgentID {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"error": "Not authorized for this event",
-			})
+			tx.Rollback()
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not authorized for this event"})
 		}
 
-		if event.Status != "rooms_finalized" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Event is not finalized",
-			})
+		// Update Status
+		if err := tx.Model(&event).Update("status", "allocating").Error; err != nil {
+			tx.Rollback()
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to reopen allocation"})
 		}
 
-		// Reopen allocation
-		if err := db.Model(&event).Update("status", "allocating").Error; err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Failed to reopen allocation",
-			})
+		if err := tx.Commit().Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Commit failed"})
 		}
 
 		log.Printf("✅ Event %s allocation reopened", eventID)
 
 		return c.JSON(fiber.Map{
-			"message":  "Allocation reopened successfully",
-			"event_id": eventID,
+			"message":  "Room mapping reopened successfully",
 			"status":   "allocating",
+			"event_id": eventID,
 		})
 	}
 }
@@ -846,6 +824,13 @@ func UpdateAllocationHandler(db *gorm.DB) fiber.Handler {
 		}
 
 		// Step 4: Check Event Status
+		if event.Status == "rooms_finalized" {
+			tx.Rollback()
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "Room mapping is locked. Try contacting agent.",
+			})
+		}
+
 		if event.Status != "allocating" {
 			tx.Rollback()
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
@@ -1024,6 +1009,9 @@ func AutoAllocateHandler(db *gorm.DB) fiber.Handler {
 		}
 
 		eventID := c.Params("eventId")
+		if eventID == "" {
+			eventID = c.Params("id")
+		}
 		eventUUID, err := uuid.Parse(eventID)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid event_id"})
@@ -1054,6 +1042,13 @@ func AutoAllocateHandler(db *gorm.DB) fiber.Handler {
 		}
 
 		// 3. Status Check
+		if event.Status == "rooms_finalized" {
+			tx.Rollback()
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "Room mapping is locked. Try contacting agent.",
+			})
+		}
+
 		if event.Status != "allocating" {
 			tx.Rollback()
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Event is not in 'allocating' status"})
