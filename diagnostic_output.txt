@@ -1,0 +1,26 @@
+﻿≡ƒöì STARTING DIAGNOSTIC ANALYSIS SCRIPT
+Γ£à DB Connected
+
+2026/02/16 20:05:53 [32mT:/TBO_BACKEND/cmd/diagnostic_repro/main.go:97 [33mSLOW SQL >= 200ms
+[0m[31;1m[216.191ms] [33m[rows:1][35m INSERT INTO "users" ("name","email","password_hash","phone","role","id") VALUES ('Diagnostic Agent','diag_1771252552@test.com','$2a$10$5R8V3T3FxxA3v3Dd2AsZMeqDNVhr3F1NFWHlJCVeXNwagm4j28mEC','','agent','bb94c250-ba85-4673-a2fc-b72b57bec383') RETURNING "id"[0m
+Γ£à Diagnostic Agent Created & Token Generated
+Γ£à Diagnostic Event Created: b6e6551b-82f3-4ce6-9b70-adefd53988d5
+
+--- STEP 1 & 6: DATA SHAPE & INVENTORY ---
+≡ƒæë /allocations RESPONSE PAYLOAD:
+{"event_id":"b6e6551b-82f3-4ce6-9b70-adefd53988d5","status":"draft","rooms_inventory":[{"room_offer_id":"RO_1","room_name":"Standard","available":5,"max_capacity":2,"price_per_room":0}],"allocations":[]}
+
+--- STEP 2: KEY PROP INVESTIGATION ---
+≡ƒæë /guests RESPONSE PAYLOAD:
+{"success":true,"data":{"guests":[{"id":"c557df9f-c196-48aa-96db-8f93bdd98430","name":"G1_Dad","age":0,"type":"adult","phone":"","email":"","event_id":"b6e6551b-82f3-4ce6-9b70-adefd53988d5","family_id":"8f29c278-0c5d-4317-b625-a4ec097fd988","arrival_date":"0001-01-01T05:30:00+05:30","departure_date":"0001-01-01T05:30:00+05:30"},{"id":"cae0c766-dd36-4ae5-9cff-ba1ccedf0858","name":"G1_Mom","age":0,"type":"adult","phone":"","email":"","event_id":"b6e6551b-82f3-4ce6-9b70-adefd53988d5","family_id":"8f29c278-0c5d-4317-b625-a4ec097fd988","arrival_date":"0001-01-01T05:30:00+05:30","departure_date":"0001-01-01T05:30:00+05:30"},{"id":"8cfb9e82-7e1a-45f8-887e-8a95a594c3bf","name":"G2_Solo","age":0,"type":"adult","phone":"","email":"","event_id":"b6e6551b-82f3-4ce6-9b70-adefd53988d5","family_id":"f4b663f8-4aea-4e66-98f0-2ceb91188c55","arrival_date":"0001-01-01T05:30:00+05:30","departure_date":"0001-01-01T05:30:00+05:30"}]}}
+
+--- STEP 3: FAMILY GROUPING ---
+Γä╣∩╕Å  Check /guests output above for 'family_id' casing (family_id vs familyId)
+
+--- STEP 4: EVENT STATUS ---
+≡ƒæë Attempting Allocation in DRAFT status:
+Status Code: 400
+
+--- STEP 5: INVALID EVENT ID ---
+≡ƒæë Payload Check (snake_case):
+≡ƒæë Payload Check (camelCase):

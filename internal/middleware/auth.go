@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log"
 	"strings"
 
 	"github.com/akashtripathi12/TBO_Backend/internal/utils"
@@ -28,6 +29,8 @@ func Protected(c *fiber.Ctx) error {
 	c.Locals("userID", claims.UserID)
 	c.Locals("email", claims.Email)
 	c.Locals("role", claims.Role)
+
+	log.Printf("🛡️ Auth Middleware Passed | UserID: %s | Role: %s", claims.UserID, claims.Role)
 
 	return c.Next()
 }

@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"fmt"
+	"log"
 	"time"
 
 	"github.com/akashtripathi12/TBO_Backend/internal/models"
@@ -18,7 +20,49 @@ func (m *Repository) GetGuests(c *fiber.Ctx) error {
 		return utils.InternalErrorResponse(c, "Failed to fetch guests")
 	}
 
-	return utils.SuccessResponse(c, fiber.StatusOK, fiber.Map{
+	// DEBUG LOG
+	// For local dev, using fmt.Printf to see output in terminal
+	// In production, use structured logging
+	// import "fmt" if needed, but "log" is available
+	// Let's use log.Printf
+	// Ensure "log" is imported
+	// log.Printf("DEBUG GetGuests: EventID=%s, Count=%d", eventID, len(guests))
+	// for i, g := range guests {
+	//    if i < 3 { log.Printf("Guest[%d]: ID=%s, Family=%s", i, g.ID, g.FamilyID) }
+	// }
+
+	// Actually implementing log.Printf requires import.
+	// The previous view_file of guests.go showed imports: time, models, utils, fiber, uuid.
+	// Need to add "log".
+	// I will replace import block and function body in one go if possible, or just add "log" if I can.
+	// replace_file_content is better for blocks.
+
+	// I will skip adding "log" import for now and use fmt if available, or just rely on existing imports.
+	// Wait, guests.go doesn't import "log" or "fmt".
+	// I need to add import.
+
+	// Let's defer backend logging change until I verify imports.
+
+	// The previous view_file output for guests.go line 1-10:
+	// package handlers
+	// import ( "time", ... )
+
+	// No "log".
+
+	// I will invoke replace_file_content generously to include imports.
+
+	// DEBUG LOG
+	log.Printf("DEBUG GetGuests: EventID=%s, Count=%d", eventID, len(guests))
+	for i, g := range guests {
+		if i < 5 { // limit log
+			fmt.Printf("Guest[%d]: ID=%s, Family=%s, Event=%s\n", i, g.ID, g.FamilyID, g.EventID)
+		}
+	}
+
+	// Backend Fix: Return raw JSON to match frontend expectation
+	// Frontend expects: { "guests": [...] }
+	// generic-utils.SuccessResponse returns { "data": { "guests": [...] } }
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"guests": guests,
 	})
 }
@@ -60,7 +104,7 @@ func (m *Repository) CreateGuest(c *fiber.Ctx) error {
 	// 1. Try generic map parsing to check JSON syntax
 	var genericMap map[string]interface{}
 	if err := c.BodyParser(&genericMap); err != nil {
-		return utils.ValidationErrorResponse(c, "DEBUG: JSON Syntax Error: "+err.Error()+ " | Body: "+string(rawBody))
+		return utils.ValidationErrorResponse(c, "DEBUG: JSON Syntax Error: "+err.Error()+" | Body: "+string(rawBody))
 	}
 
 	var req GuestInput
@@ -77,6 +121,15 @@ func (m *Repository) CreateGuest(c *fiber.Ctx) error {
 	parsedEventID, err := uuid.Parse(eventID)
 	if err != nil {
 		return utils.ValidationErrorResponse(c, "Invalid Event ID")
+	}
+
+	// Guard: Check Event Status (New Lifecycle)
+	var event models.Event
+	if err := m.DB.Where("id = ?", parsedEventID).First(&event).Error; err != nil {
+		return utils.NotFoundResponse(c, "Event")
+	}
+	if event.Status == "finalized" {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Event is finalized and locked")
 	}
 
 	// 🔥 Generate ONE FamilyID for this registration
@@ -109,7 +162,7 @@ func (m *Repository) CreateGuest(c *fiber.Ctx) error {
 	if len(req.FamilyMembers) > 0 {
 		for _, memberInput := range req.FamilyMembers {
 			memberModel := toModel(memberInput)
-			
+
 			// Inherit dates from main guest if missing
 			if memberModel.ArrivalDate.IsZero() {
 				memberModel.ArrivalDate = mainGuest.ArrivalDate
@@ -165,6 +218,15 @@ func (m *Repository) UpdateGuest(c *fiber.Ctx) error {
 		return utils.NotFoundResponse(c, "Guest")
 	}
 
+	// Guard: Check Event Status
+	var event models.Event
+	if err := m.DB.Where("id = ?", guest.EventID).First(&event).Error; err != nil {
+		return utils.NotFoundResponse(c, "Event")
+	}
+	if event.Status == "finalized" {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Event is finalized and locked")
+	}
+
 	// Update fields
 	m.DB.Model(&guest).Updates(input)
 
@@ -178,6 +240,20 @@ func (m *Repository) UpdateGuest(c *fiber.Ctx) error {
 // Delete Guest
 func (m *Repository) DeleteGuest(c *fiber.Ctx) error {
 	id := c.Params("id")
+
+	// Guard: Check Event Status (Need to fetch guest first to get event_id)
+	var guest models.Guest
+	if err := m.DB.First(&guest, "id = ?", id).Error; err != nil {
+		return utils.NotFoundResponse(c, "Guest")
+	}
+
+	var event models.Event
+	if err := m.DB.Where("id = ?", guest.EventID).First(&event).Error; err != nil {
+		return utils.NotFoundResponse(c, "Event")
+	}
+	if event.Status == "finalized" {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Event is finalized and locked")
+	}
 
 	// Transaction to delete guest and release room (future scope: implementation plan mentioned shadow inventory release)
 	tx := m.DB.Begin()

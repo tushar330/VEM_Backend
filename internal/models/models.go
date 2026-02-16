@@ -28,8 +28,8 @@ type AgentProfile struct {
 }
 
 type Guest struct {
-	ID            uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	Name          string    `gorm:"not null" json:"name"`
+	ID            uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"guest_id"`
+	Name          string    `gorm:"not null" json:"guest_name"`
 	Age           int       `json:"age"`
 	Type          string    `gorm:"default:'adult'" json:"type"` // 'adult' or 'child'
 	Phone         string    `json:"phone"`
@@ -59,7 +59,7 @@ type Event struct {
 	Name           string         `gorm:"not null" json:"name"`
 	Location       string         `json:"location"`
 	RoomsInventory datatypes.JSON `gorm:"type:jsonb" json:"rooms_inventory"`
-	Status         string         `gorm:"default:'draft'" json:"status"`
+	Status         string         `gorm:"default:'active'" json:"status"`
 	StartDate      time.Time      `json:"start_date"`
 	EndDate        time.Time      `json:"end_date"`
 

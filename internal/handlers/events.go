@@ -173,6 +173,9 @@ func (m *Repository) CreateEvent(c *fiber.Ctx) error {
 	}
 
 	// JSONB handling for RoomsInventory
+	for i := range req.RoomsInventory {
+		req.RoomsInventory[i].Total = req.RoomsInventory[i].Available
+	}
 	roomsJSON, _ := json.Marshal(req.RoomsInventory)
 
 	event := models.Event{
@@ -183,7 +186,7 @@ func (m *Repository) CreateEvent(c *fiber.Ctx) error {
 		Location:       req.Location,
 		StartDate:      startDate,
 		EndDate:        endDate,
-		Status:         "draft",
+		Status:         "active",
 		RoomsInventory: datatypes.JSON(roomsJSON),
 	}
 

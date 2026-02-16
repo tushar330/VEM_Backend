@@ -47,6 +47,15 @@ func (m *Repository) AddToCart(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid Event ID")
 	}
 
+	// Guard: Check Event Status (New Lifecycle)
+	var event models.Event
+	if err := m.DB.Where("id = ?", eventID).First(&event).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "Event not found")
+	}
+	if event.Status == "finalized" {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Event is finalized and locked")
+	}
+
 	// Parse request
 	var req AddToCartRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -222,6 +231,15 @@ func (m *Repository) UpdateCartItem(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid Cart Item ID")
 	}
 
+	// Guard: Check Event Status
+	var event models.Event
+	if err := m.DB.Where("id = ?", eventID).First(&event).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "Event not found")
+	}
+	if event.Status == "finalized" {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Event is finalized and locked")
+	}
+
 	// Parse request
 	var req UpdateCartItemRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -278,6 +296,15 @@ func (m *Repository) RemoveFromCart(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid Cart Item ID")
 	}
 
+	// Guard: Check Event Status
+	var event models.Event
+	if err := m.DB.Where("id = ?", eventID).First(&event).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "Event not found")
+	}
+	if event.Status == "finalized" {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Event is finalized and locked")
+	}
+
 	// Delete cart item
 	result := m.DB.Where("id = ? AND event_id = ?", cartItemID, eventID).Delete(&models.CartItem{})
 	if result.Error != nil {
@@ -302,6 +329,15 @@ func (m *Repository) UpdateCartStatus(c *fiber.Ctx) error {
 	// Validate event ID
 	if _, err := uuid.Parse(eventID); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid Event ID")
+	}
+
+	// Guard: Check Event Status
+	var event models.Event
+	if err := m.DB.Where("id = ?", eventID).First(&event).Error; err != nil {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "Event not found")
+	}
+	if event.Status == "finalized" {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Event is finalized and locked")
 	}
 
 	// Update all wishlist items to approved

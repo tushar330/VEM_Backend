@@ -39,6 +39,7 @@ type EventAllocationsResponse struct {
 type RoomsInventoryItem struct {
 	RoomOfferID  string `json:"room_offer_id"`
 	RoomName     string `json:"room_name"`
+	Total        int    `json:"total"`
 	Available    int    `json:"available"`
 	MaxCapacity  int    `json:"max_capacity"`
 	PricePerRoom int    `json:"price_per_room"`
@@ -48,10 +49,7 @@ type RoomsInventoryItem struct {
 func GetEventAllocationsHandler(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// support both :eventId (new) and :id (legacy/standard)
-		eventID := c.Params("eventId")
-		if eventID == "" {
-			eventID = c.Params("id")
-		}
+		eventID := c.Params("id")
 
 		log.Printf("🔍 GetEventAllocations: Requested Event ID: %s", eventID)
 
@@ -250,17 +248,10 @@ func AllocateFamilyHandler(db *gorm.DB) fiber.Handler {
 		}
 
 		// Step 3: Check if event allows allocation
-		if event.Status == "rooms_finalized" {
+		if event.Status == "finalized" {
 			tx.Rollback()
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"error": "Room mapping is locked. Try contacting agent.",
-			})
-		}
-
-		if event.Status != "allocating" {
-			tx.Rollback()
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"error": fmt.Sprintf("Cannot allocate rooms. Event status is '%s'", event.Status),
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Event is finalized and locked",
 			})
 		}
 
@@ -385,7 +376,7 @@ func AllocateFamilyHandler(db *gorm.DB) fiber.Handler {
 			})
 		}
 
-		if err := tx.Model(&event).Update("rooms_inventory", datatypes.JSON(updatedInventoryJSON)).Error; err != nil {
+		if err := tx.Model(&models.Event{}).Where("id = ?", eventID).Update("rooms_inventory", datatypes.JSON(updatedInventoryJSON)).Error; err != nil {
 			tx.Rollback()
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": "Failed to save inventory",
@@ -438,7 +429,7 @@ func FinalizeRoomsHandler(db *gorm.DB) fiber.Handler {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not authorized"})
 		}
 
-		eventID := c.Params("eventId")
+		eventID := c.Params("id")
 		eventUUID, err := uuid.Parse(eventID)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid event_id"})
@@ -471,13 +462,13 @@ func FinalizeRoomsHandler(db *gorm.DB) fiber.Handler {
 			}
 		}
 
-		if event.Status == "rooms_finalized" {
+		if event.Status == "finalized" {
 			tx.Rollback()
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Rooms are already finalized"})
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Event already finalized"})
 		}
 
 		// Update Status
-		if err := tx.Model(&event).Update("status", "rooms_finalized").Error; err != nil {
+		if err := tx.Model(&event).Update("status", "finalized").Error; err != nil {
 			tx.Rollback()
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to finalize rooms"})
 		}
@@ -490,13 +481,13 @@ func FinalizeRoomsHandler(db *gorm.DB) fiber.Handler {
 
 		return c.JSON(fiber.Map{
 			"message":  "Room mapping locked successfully",
-			"status":   "rooms_finalized",
+			"status":   "finalized",
 			"event_id": eventID,
 		})
 	}
 }
 
-// ReopenAllocationHandler reopens allocation for an event (agent only)
+// ReopenAllocationHandler transitions event status to 'active'
 func ReopenAllocationHandler(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// Extract authenticated user
@@ -514,16 +505,11 @@ func ReopenAllocationHandler(db *gorm.DB) fiber.Handler {
 		if userRole == nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 		}
-		role, ok := userRole.(string)
-		if !ok {
+		if _, ok := userRole.(string); !ok {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Invalid user role type"})
 		}
 
-		if role != "agent" {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not authorized"})
-		}
-
-		eventID := c.Params("eventId")
+		eventID := c.Params("id")
 		eventUUID, err := uuid.Parse(eventID)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid event_id"})
@@ -549,21 +535,30 @@ func ReopenAllocationHandler(db *gorm.DB) fiber.Handler {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not authorized for this event"})
 		}
 
-		// Update Status
-		if err := tx.Model(&event).Update("status", "allocating").Error; err != nil {
+		// State Machine Validation
+		// Valid transitions: finalized -> active
+		if event.Status != "finalized" {
 			tx.Rollback()
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to reopen allocation"})
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Event is not finalized",
+			})
+		}
+
+		// Update Status
+		if err := tx.Model(&event).Update("status", "active").Error; err != nil {
+			tx.Rollback()
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update status"})
 		}
 
 		if err := tx.Commit().Error; err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Commit failed"})
 		}
 
-		log.Printf("✅ Event %s allocation reopened", eventID)
+		log.Printf("✅ Event %s re-opened (active)", eventID)
 
 		return c.JSON(fiber.Map{
-			"message":  "Room mapping reopened successfully",
-			"status":   "allocating",
+			"message":  "Event reopened successfully",
+			"status":   "active",
 			"event_id": eventID,
 		})
 	}
@@ -609,7 +604,7 @@ func CheckInFamilyHandler(db *gorm.DB) fiber.Handler {
 			})
 		}
 
-		eventID := c.Params("eventId")
+		eventID := c.Params("id")
 		familyID := c.Params("familyId")
 
 		eventUUID, err := uuid.Parse(eventID)
@@ -824,17 +819,10 @@ func UpdateAllocationHandler(db *gorm.DB) fiber.Handler {
 		}
 
 		// Step 4: Check Event Status
-		if event.Status == "rooms_finalized" {
+		if event.Status == "finalized" {
 			tx.Rollback()
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"error": "Room mapping is locked. Try contacting agent.",
-			})
-		}
-
-		if event.Status != "allocating" {
-			tx.Rollback()
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"error": fmt.Sprintf("Cannot update allocation. Event status is '%s'", event.Status),
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Event is finalized and locked",
 			})
 		}
 
@@ -1008,10 +996,7 @@ func AutoAllocateHandler(db *gorm.DB) fiber.Handler {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not authorized"})
 		}
 
-		eventID := c.Params("eventId")
-		if eventID == "" {
-			eventID = c.Params("id")
-		}
+		eventID := c.Params("id")
 		eventUUID, err := uuid.Parse(eventID)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid event_id"})
@@ -1041,17 +1026,12 @@ func AutoAllocateHandler(db *gorm.DB) fiber.Handler {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not authorized"})
 		}
 
-		// 3. Status Check
-		if event.Status == "rooms_finalized" {
+		// 3. Status Check (New Lifecycle)
+		if event.Status == "finalized" {
 			tx.Rollback()
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"error": "Room mapping is locked. Try contacting agent.",
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Event is finalized and locked",
 			})
-		}
-
-		if event.Status != "allocating" {
-			tx.Rollback()
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Event is not in 'allocating' status"})
 		}
 
 		// 4. Parse Inventory
@@ -1062,10 +1042,6 @@ func AutoAllocateHandler(db *gorm.DB) fiber.Handler {
 		}
 
 		// 5. Fetch Family Guests (Unallocated)
-		// Logic: Get all guest allocations for this event.
-		// Then get all guests for this event.
-		// Filter out guests who are in allocations.
-
 		var allAllocations []models.GuestAllocation
 		if err := tx.Where("event_id = ?", eventUUID).Find(&allAllocations).Error; err != nil {
 			tx.Rollback()
@@ -1118,8 +1094,8 @@ func AutoAllocateHandler(db *gorm.DB) fiber.Handler {
 				if room.Available > 0 && room.MaxCapacity >= size {
 					selectedRoomIndex = i
 					selectedRoomOfferID = room.RoomOfferID
-					selectedRoomPrice = room.PricePerRoom // simplistic price logic
-					break                                 // Greedy
+					selectedRoomPrice = room.PricePerRoom
+					break
 				}
 			}
 
