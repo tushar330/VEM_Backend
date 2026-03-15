@@ -39,3 +39,9 @@ func (repo *Repository) ReopenAllocation(c *fiber.Ctx) error {
 	handler := ReopenAllocationHandler(repo.DB)
 	return handler(c)
 }
+
+// AIAllocate runs the read-only AI heuristic optimisation suggestion engine
+func (repo *Repository) AIAllocate(c *fiber.Ctx) error {
+	handler := AIAllocateHandler(repo.DB)
+	return handler(c)
+}

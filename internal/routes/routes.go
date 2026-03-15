@@ -63,6 +63,7 @@ func SetupRoutes(app *fiber.App, cfg *config.Config, repo *handlers.Repository) 
 	events.Post("/:id/send-invites", repo.SendInvites) // New route
 	events.Post("/:id/finalize", repo.FinalizeRooms)
 	events.Post("/:id/reopen", repo.ReopenAllocation)
+	events.Post("/:id/ai-allocate", repo.AIAllocate) // Read-only AI suggestion engine
 
 	// Cart Routes
 	events.Get("/:id/cart", repo.GetEventCart)
