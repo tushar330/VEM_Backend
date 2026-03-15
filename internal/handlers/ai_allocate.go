@@ -674,7 +674,7 @@ func AIAllocateHandler(db *gorm.DB) fiber.Handler {
 		if role == "agent" && userUUID != event.AgentID {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not authorized for this event"})
 		}
-		if role == "head_guest" && userUUID != event.HeadGuestID {
+		if role == "head_guest" && userUUID != event.EventManagerID {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not authorized for this event"})
 		}
 		if event.Status == "finalized" || event.Status == "locked" {
